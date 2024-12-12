@@ -1,4 +1,4 @@
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
@@ -15,6 +15,7 @@ app.use(express.json())
 
 
 
+// const uri ='mongodb://localhost:27017';
 const uri = `mongodb+srv://${process.env.DB_User}:${process.env.DB_pass}@cluster0.ot76b.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -28,19 +29,76 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
+      // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
+      
+
+      const jobsCollection = client.db("job-portal").collection("jobs");
+      const jobApplicationCollection = client.db("job-portal").collection("jobs-application");
 
 
 
 
+/* ------------------------------ get all data ------------------------------ */
+    app.get('/jobs',async(req,res)=>{
+        const result =await jobsCollection.find().toArray()
+        res.send(result)
+    })
+/* ----------------------------- get single data ---------------------------- */
+app.get('/jobs/:id',async(req,res)=>{
+    const id = req.params.id
+    const query ={_id: new ObjectId(id)}
+    const result =await jobsCollection.findOne(query)
+    res.send(result)
+})
 
 
+// post data
+app.post('/job-applications',async(req,res)=>{
+  const data = req.body
+  const result = await jobApplicationCollection.insertOne(data)
+  console.log(result)
+  res.send(result)
+})
 
+/* ------------------------ get job Application data ------------------------ */
+// app.get('/job-applications',async(req,res)=>{
+//   const result =await jobApplicationCollection.find().toArray()
+//   res.send(result)
+// })
+
+
+        // job application apis
+        // get all data, get one data, get some data [o, 1, many]
+
+
+app.get('/job-applications',async(req,res)=>{
+  const email = req.query.email
+  const query = {applicant_email: email}
+  const result = await jobApplicationCollection.find(query).toArray()
+  // for (const element of object) {
     
+  // }
+  for (const applicant of result) {
+    // console.log(applicant.job_id)
+    const query1 = {_id: new ObjectId(applicant.job_id)}
+    const job = await jobsCollection.findOne(query1)
+    console.log(job)
+    //  res.send(job);
+     if (job) {
+      applicant.title = job.title;
+      applicant.location = job.location;
+      applicant.company = job.company;
+      applicant.company_logo = job.company_logo;
+     }
+     
+  }
+  res.send(result)
+})
+
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
