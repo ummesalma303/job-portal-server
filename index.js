@@ -63,20 +63,51 @@ app.get('/jobs/:id',async(req,res)=>{
 app.post('/jobs',async(req,res)=>{
   const newJob = req.body
   const result = await jobsCollection.insertOne(newJob)
-
-  
-  console.log(result)
+  // console.log(result)
   res.send(result)
 })
 
 
 
 
+
+
+
+/* -------------------------- job application apis -------------------------- */
+app.get('/jobApplications/:id',async(req,res)=>{
+  const jobId = req.params.id
+  // const query = {job_id: new ObjectId(id)}
+  const query = {job_id: jobId}
+  const result = await jobApplicationCollection.find(query).toArray()
+  console.log(result)
+  res.send(result)
+})
+
 /* -------------------------- job application apis -------------------------- */
 app.post('/job-applications',async(req,res)=>{
   const data = req.body
   const result = await jobApplicationCollection.insertOne(data)
-  console.log(result)
+
+  const id = data.job_id
+  const query = {_id:new ObjectId(id)}
+  const job =await jobsCollection.findOne(query)
+  console.log(job)
+
+  let count = 0
+  if (job.applicationCount) {
+    count=job.applicationCount +1
+  }else{
+    count= 1
+  }
+  const filter = { _id: new ObjectId(id)};
+  const updateDoc = {
+    $set: {
+      applicationCount:
+        count,
+    },
+  }
+  const updateResult = await jobsCollection.updateOne(filter, updateDoc);
+  console.log(updateResult)
   res.send(result)
 })
 
