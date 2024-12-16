@@ -2,13 +2,45 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 const port = process.env.PORT || 5000;
 
 /* -------------------------------- middleware ------------------------------- */
-app.use(cors());
+// app.use(cors());
 app.use(express.json());
+app.use(cookieParser())
+
+// configure cookie
+
+app.use(cors({
+  origin: ["http://localhost:5173"],
+  credentials:true
+}))
+
+const logger =(req,res,next)=>{
+  console.log('i am a middleware')
+  next()
+}
+
+const verifyToken=(req,res,next)=>{
+  const token = req?.cookies?.token
+  if (!token){
+    return res.status(401).send({message:'unAuthorized access'})
+  }
+  // console.log('cuk cuk cuk cookies', token)
+  jwt.verify(token,process.env.JWT_SECRET,(err,decoded)=>{
+    // console.log(decoded)
+    if(err){
+      return res.status(401).send({message:'your token not matched.unAuthorized access'})
+    }
+    req.user = decoded
+    next()
+  })
+}
+
 
 // const uri ='mongodb://localhost:27017';
 const uri = `mongodb+srv://${process.env.DB_User}:${process.env.DB_pass}@cluster0.ot76b.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -36,6 +68,15 @@ async function run() {
     const jobApplicationCollection = client
       .db("job-portal")
       .collection("jobs-application");
+
+
+      /* -------------------------------- jwt token ------------------------------- */
+      app.post('/jwt',(req,res)=>{
+        const user = req.body
+        const token = jwt.sign(user,process.env.JWT_SECRET,{ expiresIn: '6h' })
+        console.log(token)
+        res.cookie('token',token,{httpOnly:true,secure:false}).send({success:true})
+      })
 
     /* ------------------------------  jobs related APIs ------------------------------ */
     app.get("/jobs", async (req, res) => {
@@ -95,7 +136,7 @@ async function run() {
     app.post("/job-applications", async (req, res) => {
       const data = req.body;
       const result = await jobApplicationCollection.insertOne(data);
-
+    
       const id = data.job_id;
       const query = { _id: new ObjectId(id) };
       const job = await jobsCollection.findOne(query);
@@ -120,19 +161,22 @@ async function run() {
 
     /* ------------------------ get job Application data ------------------------ */
 
-    app.get("/job-applications", async (req, res) => {
+    app.get("/job-applications",logger,verifyToken, async (req, res) => {
       const email = req.query.email;
       const query = { applicant_email: email };
-      console.log("128 number", query);
-      const result = await jobApplicationCollection.find(query).toArray();
-      // for (const element of object) {
+        // console.log('cuk cuk cuk cookies', req.cookies)
+      if (req.user.email !== email) {
+        return res.status(403).send({message:'forbidden access'})
+      }
+      
 
-      // }
+      const result = await jobApplicationCollection.find(query).toArray();
+     
       for (const applicant of result) {
         // console.log(applicant.job_id)
         const query1 = { _id: new ObjectId(applicant.job_id) };
         const job = await jobsCollection.findOne(query1);
-        console.log(job);
+        // console.log(job);
         //  res.send(job);
         if (job) {
           applicant.title = job.title;
@@ -141,7 +185,7 @@ async function run() {
           applicant.company_logo = job.company_logo;
         }
       }
-      console.log("146 number ", result);
+      // console.log("146 number ", result);
       res.send(result);
     });
   } finally {
